@@ -35,3 +35,6 @@ wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Data folders - night observation data
+data/night_*/
