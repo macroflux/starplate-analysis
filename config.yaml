@@ -1,0 +1,20 @@
+masking:
+  brightness_threshold: 10
+  overlay_region:
+    top: 0
+    bottom: 140
+    left: 0
+    right: 450
+
+analysis:
+  gaussian_sigma: 5
+  
+streak_detection:
+  canny_low: 40
+  canny_high: 120
+  hough_threshold: 60
+  min_line_length: 40
+  max_line_gap: 10
+  
+events:
+  min_streaks: 2
