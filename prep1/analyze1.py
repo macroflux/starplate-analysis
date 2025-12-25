@@ -18,6 +18,18 @@ def load_config(config_path: Path = None) -> dict:
     Returns:
         Configuration dictionary with all parameters.
     """
+    def deep_merge(base: dict, update: dict) -> dict:
+        """Recursively merge update dict into base dict."""
+        result = base.copy()
+        for key, value in update.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                # Recursively merge nested dictionaries
+                result[key] = deep_merge(result[key], value)
+            else:
+                # Overwrite or add new key
+                result[key] = value
+        return result
+    
     default_config = {
         "masking": {
             "brightness_threshold": 10,
@@ -50,15 +62,9 @@ def load_config(config_path: Path = None) -> dict:
         try:
             with open(config_path, 'r') as f:
                 loaded_config = yaml.safe_load(f)
-                # Perform deep merge: update nested dictionaries
+                # Perform recursive deep merge
                 if loaded_config:
-                    for section, values in loaded_config.items():
-                        if section in default_config and isinstance(values, dict):
-                            # Merge nested sections
-                            default_config[section].update(values)
-                        else:
-                            # Add new top-level sections
-                            default_config[section] = values
+                    default_config = deep_merge(default_config, loaded_config)
                 print(f"Loaded configuration from {config_path}")
         except Exception as e:
             print(f"Warning: Could not load config from {config_path}: {e}")

@@ -71,9 +71,10 @@ def create_plots(data: dict, output_dir: Path, show: bool = False, event_thresho
         data: Dictionary with metric data
         output_dir: Directory to save plots
         show: Whether to display plots interactively
-        event_threshold: Minimum streak count to highlight as event (default: 2)
+        event_threshold: Minimum streak count to highlight as event (default: 2, should match config)
     """
     # Set matplotlib backend based on display mode
+    # Must be set before creating any figures
     if not show:
         matplotlib.use('Agg')  # Non-interactive backend for file output only
     

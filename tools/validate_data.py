@@ -116,8 +116,8 @@ def validate_frames(night_dir: Path) -> bool:
     dimensions = set()
     
     for i, frame_path in enumerate(jpg_files[:sample_count]):
-        # Use cv2.IMREAD_REDUCED_GRAYSCALE_2 to load a downscaled version for validation
-        # This is more memory efficient than loading the full image
+        # Load image to check if it's readable and get dimensions
+        # Using IMREAD_UNCHANGED to preserve original image properties
         img = cv2.imread(str(frame_path), cv2.IMREAD_UNCHANGED)
         if img is None:
             print(f"❌ FAIL: Cannot read {frame_path.name}")
