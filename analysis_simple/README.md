@@ -51,19 +51,19 @@ Analyze a night's worth of frames:
 
 ```bash
 cd analysis_simple/
-python analyze1.py ../examples/night_2025-12-24/
+python analyze.py ../data/night_2025-12-24/
 ```
 
 ### With Custom Configuration
 
 ```bash
-python analyze1.py ../examples/night_2025-12-24/ --config config.yaml
+python analyze.py ../data/night_2025-12-24/ --config config.yaml
 ```
 
 ### Get Help
 
 ```bash
-python analyze1.py --help
+python analyze.py --help
 ```
 
 ## Folder Structure
@@ -177,7 +177,7 @@ events:
 
 3. Run analysis with custom config:
    ```bash
-   python analyze1.py ../path/to/night_data --config my_config.yaml
+   python analyze.py ../path/to/night_data --config my_config.yaml
    ```
 
 ## Visualization
@@ -187,10 +187,10 @@ events:
 Visualize brightness, contrast, and streak counts:
 
 ```bash
-python ../tools/visualize.py ../examples/night_2025-12-24/
+python tools/visualize.py ../data/night_2025-12-24/
 ```
 
-Generates plots in `../examples/night_2025-12-24/plots/`:
+Generates plots in `../data/night_2025-12-24/plots/`:
 - `brightness_over_time.png`
 - `contrast_over_time.png`
 - `streak_counts.png`
@@ -200,17 +200,17 @@ Generates plots in `../examples/night_2025-12-24/plots/`:
 Draw detected streaks on the original images:
 
 ```bash
-python ../tools/overlay_streaks.py ../examples/night_2025-12-24/
+python tools/overlay_streaks.py ../data/night_2025-12-24/
 ```
 
-Creates annotated images in `../examples/night_2025-12-24/annotated/` with detected streaks drawn in red.
+Creates annotated images in `../data/night_2025-12-24/annotated/` with detected streaks drawn in red.
 
 ## Validation
 
 Before running analysis, validate your data structure:
 
 ```bash
-python ../tools/validate_data.py ../examples/night_2025-12-24/
+python tools/validate_data.py ../data/night_2025-12-24/
 ```
 
 This checks:
@@ -221,14 +221,14 @@ This checks:
 
 ## Example Data
 
-See `../examples/night_2025-12-24/` for a sample data structure with example outputs.
+See `../data/night_2025-12-24/` for a sample data structure with example outputs.
 
 ## Troubleshooting
 
 ### "No frames found"
 - Ensure your images are in `.jpg` format (not `.jpeg`, `.png`, etc.)
 - Check that images are in the `frames/` subdirectory
-- Run validation: `python ../tools/validate_data.py <night_dir>`
+- Run validation: `python tools/validate_data.py <night_dir>`
 
 ### "Config file not found"
 - The script looks for `config.yaml` in the `analysis_simple/` directory by default

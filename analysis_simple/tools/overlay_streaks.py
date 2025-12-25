@@ -32,7 +32,7 @@ def load_events(events_path: Path) -> list:
     """
     if not events_path.exists():
         print(f"Error: Events file not found: {events_path}", file=sys.stderr)
-        print("Run analyze1.py first to generate events.", file=sys.stderr)
+        print("Run analyze.py first to generate events.", file=sys.stderr)
         sys.exit(1)
     
     try:

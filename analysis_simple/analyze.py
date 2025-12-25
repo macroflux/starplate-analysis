@@ -1,4 +1,4 @@
-# analyze1.py
+# analyze.py
 import cv2
 import json
 import csv
@@ -224,8 +224,8 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python analyze1.py ./night_2025-12-24
-  python analyze1.py ./night_2025-12-24 --config custom_config.yaml
+  python analyze.py ./night_2025-12-24
+  python analyze.py ./night_2025-12-24 --config custom_config.yaml
   
 Output files:
   - sky_mask.png: Mask excluding non-sky regions

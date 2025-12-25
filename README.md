@@ -34,7 +34,7 @@ cd analysis_simple/
 pip install -r requirements.txt
 
 # Run the tool
-python analyze1.py ../examples/night_2025-12-24/
+python analyze.py ../data/night_2025-12-24/
 ```
 
 ## Tool Development Guidelines
@@ -43,14 +43,15 @@ Each tool folder should contain:
 - `README.md` - Complete usage documentation
 - `requirements.txt` - Python dependencies
 - `config.yaml` or similar - Configuration files
+- `tools/` - Tool-specific utilities and helper scripts
 - `.github/` (optional) - Tool-specific CI/CD workflows
 - Source code files
 
 Tools should be self-contained and independently runnable.
 
-## Examples
+## Data
 
-The `examples/` directory contains sample data structures and outputs shared across all tools.
+The `data/` directory contains sample data structures and outputs shared across all tools. This is the common location where all analysis tools can generate and store their output images and results.
 
 ## Contributing
 
