@@ -113,13 +113,7 @@ def main(night_dir: str, config_path: str = None):
         night_dir: Path to directory containing frames/ subdirectory
         config_path: Optional path to configuration YAML file
     """
-    # Load configuration
-    if config_path:
-        config = load_config(Path(config_path))
-    else:
-        config = load_config()
-    
-    # Validate input directory
+    # Validate input directory first
     night = Path(night_dir)
     if not night.exists():
         print(f"Error: Directory '{night_dir}' does not exist.", file=sys.stderr)
@@ -136,6 +130,12 @@ def main(night_dir: str, config_path: str = None):
         print(f"Error: No .jpg frames found in '{frames_dir}'.", file=sys.stderr)
         print("Make sure your image files are in JPEG format with .jpg extension.", file=sys.stderr)
         sys.exit(1)
+    
+    # Load configuration after validation
+    if config_path:
+        config = load_config(Path(config_path))
+    else:
+        config = load_config()
     
     print(f"Found {len(frames)} frames to process.")
 
