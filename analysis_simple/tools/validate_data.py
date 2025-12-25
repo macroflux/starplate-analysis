@@ -102,7 +102,7 @@ def validate_frames(night_dir: Path) -> bool:
                 print(f"   - {f.name}")
             if len(other_formats) > 5:
                 print(f"   ... and {len(other_formats) - 5} more")
-            print(f"   Note: analyze1.py only processes .jpg files")
+            print(f"   Note: analyze.py only processes .jpg files")
         
         return False
     
@@ -196,7 +196,7 @@ def print_summary(night_dir: Path, all_valid: bool):
         print("\nYour data structure is ready for analysis!")
         print("\nNext steps:")
         print(f"  1. Run analysis:")
-        print(f"     python prep1/analyze1.py {night_dir}")
+        print(f"     cd ../analysis_simple && python analyze.py ../data/{night_dir.name}")
         print(f"\n  2. Visualize results:")
         print(f"     python tools/visualize.py {night_dir}")
         print(f"\n  3. Annotate streaks:")
@@ -229,7 +229,7 @@ This tool checks:
   - Image format and dimensions
   - Configuration file presence
   
-Run this before analyze1.py to catch issues early.
+Run this before analyze.py to catch issues early.
 """
     )
     
