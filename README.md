@@ -6,7 +6,7 @@ A collection of experimental tools for astronomical plate/time-lapse analysis to
 
 This repository contains multiple analysis tools, each in its own self-contained folder with its own dependencies, configuration, and documentation.
 
-### Available Tools
+### Analysis Tools
 
 #### `analysis_simple/`
 Basic computer vision pipeline using OpenCV for streak detection in time-lapse astronomical images.
@@ -17,25 +17,45 @@ Basic computer vision pipeline using OpenCV for streak detection in time-lapse a
 
 See [`analysis_simple/README.md`](analysis_simple/README.md) for detailed usage and configuration.
 
-#### Future Tools (Planned)
+#### Future Analysis Tools (Planned)
 - `analysis_ml/` - Machine learning-based detection using neural networks
 - `analysis_sk/` - scikit-learn based statistical analysis
 - Additional experimental pipelines as they're developed
 
+### Utility Tools
+
+#### `tools/data_fetch/`
+Robust data fetching tool for downloading astronomical images from allsky.local server.
+
+- **Purpose**: Download astroplate images with retry logic, progress tracking, and error handling
+- **Dependencies**: requests, BeautifulSoup4, PyYAML, tqdm
+- **Status**: Active (v1)
+
+See [`tools/data_fetch/README.md`](tools/data_fetch/README.md) for detailed usage and configuration.
+
+See [`tools/README.md`](tools/README.md) for information about all utility tools.
+
 ## Getting Started
 
-Each tool is independent and should be run from within its own directory:
+### Complete Workflow
 
-```bash
-# Navigate into the tool directory
-cd analysis_simple/
+1. **Download Images** (if you don't have them yet):
+   ```bash
+   cd tools/data_fetch
+   pip install -r requirements.txt
+   python fetch.py 20251224
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
+2. **Run Analysis**:
+   ```bash
+   cd ../../analysis_simple
+   pip install -r requirements.txt
+   python analyze.py ../data/night_2025-12-24/
+   ```
 
-# Run the tool
-python analyze.py ../data/night_2025-12-24/
-```
+### Individual Tool Usage
+
+Each tool is independent and should be run from within its own directory. See individual tool READMEs for detailed usage.
 
 ## Tool Development Guidelines
 

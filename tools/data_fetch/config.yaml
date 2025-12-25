@@ -1,0 +1,33 @@
+# Data Fetch Tool Configuration
+
+# Base URL for image downloads
+base_url: "http://allsky.local/images/"
+
+# Network settings
+network:
+  timeout: 30  # seconds for image download
+  listing_timeout: 10  # seconds for directory listing
+  max_retries: 3
+  backoff_multiplier: 2  # exponential backoff multiplier
+  initial_backoff: 1  # initial backoff delay in seconds
+
+# Supported image file extensions
+image_extensions:
+  - .jpg
+  - .jpeg
+  - .png
+  - .JPG
+  - .JPEG
+  - .PNG
+
+# Download settings
+download:
+  verify_checksum: false  # Enable checksum verification (MD5)
+  chunk_size: 8192  # bytes for streaming downloads
+
+# Output settings
+output:
+  data_dir: "../../data"  # relative to tools/data_fetch/
+  night_dir_format: "night_{date}"  # {date} will be replaced with YYYY-MM-DD
+  frames_subdir: "frames"
+  failed_log_filename: "failed_downloads.json"
