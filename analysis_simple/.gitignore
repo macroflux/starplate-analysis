@@ -35,3 +35,11 @@ wheels/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Project specific
+*.csv
+*.json
+*.png
+!examples/**/*.csv
+!examples/**/*.json
+!examples/**/*.png
