@@ -270,8 +270,9 @@ class ImageFetcher:
             MD5 checksum as hex string
         """
         md5 = hashlib.md5()
+        chunk_size = self.config['download']['chunk_size']
         with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
+            for chunk in iter(lambda: f.read(chunk_size), b''):
                 md5.update(chunk)
         return md5.hexdigest()
     
@@ -338,7 +339,7 @@ class ImageFetcher:
         img_url: str,
         img_path: Path,
         force: bool = False
-    ) -> Tuple[bool, Optional[str], int]:
+    ) -> Tuple[bool, Optional[str], int, bool]:
         """
         Download a single image with retry logic.
         
@@ -348,13 +349,13 @@ class ImageFetcher:
             force: Force re-download if file exists
             
         Returns:
-            Tuple of (success, error_message, file_size)
+            Tuple of (success, error_message, file_size, was_skipped)
         """
         # Skip if file exists and not forcing
         if img_path.exists() and not force:
             file_size = img_path.stat().st_size
             self.logger.debug(f"Skipping existing file: {img_path.name}")
-            return True, None, file_size
+            return True, None, file_size, True
         
         timeout = self.config['network']['timeout']
         max_retries = self.config['network']['max_retries']
@@ -381,7 +382,7 @@ class ImageFetcher:
                 
                 file_size = img_path.stat().st_size
                 self.logger.debug(f"Successfully downloaded {img_path.name} ({file_size} bytes)")
-                return True, None, file_size
+                return True, None, file_size, False
                 
             except requests.exceptions.Timeout:
                 error = "Timeout"
@@ -395,7 +396,7 @@ class ImageFetcher:
             except IOError as e:
                 error = f"File write error: {e}"
                 self.logger.error(error)
-                return False, error, 0
+                return False, error, 0, False
             
             # Exponential backoff
             if attempt < max_retries - 1:
@@ -403,7 +404,7 @@ class ImageFetcher:
                 self.logger.debug(f"Backing off for {sleep_time}s before retry")
                 time.sleep(sleep_time)
         
-        return False, error, 0
+        return False, error, 0, False
     
     def download_night(
         self,
@@ -481,12 +482,12 @@ class ImageFetcher:
                 img_url = urljoin(url_base, img_name)
                 img_path = frames_dir / img_name
                 
-                success, error, file_size = self.download_single_image(img_url, img_path, force)
+                success, error, file_size, was_skipped = self.download_single_image(img_url, img_path, force)
                 
                 if success:
                     self.stats['successful'] += 1
                     self.stats['total_size'] += file_size
-                    if img_path.exists() and not force:
+                    if was_skipped:
                         self.stats['skipped'] += 1
                 else:
                     self.stats['failed'] += 1
@@ -617,7 +618,7 @@ Examples:
     
     parser.add_argument(
         'date',
-        help='Start date in YYYYMMDD format (e.g., 20251224)'
+        help='Date in YYYYMMDD format (e.g., 20251224)'
     )
     parser.add_argument(
         '--config',
