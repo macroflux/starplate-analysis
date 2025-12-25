@@ -62,9 +62,9 @@ class ImageFetcher:
         self.stats = {
             'total_size': 0,
             'total_files': 0,
-            'successful': 0,
-            'failed': 0,
+            'downloaded': 0,
             'skipped': 0,
+            'failed': 0,
             'start_time': None,
             'end_time': None
         }
@@ -485,10 +485,11 @@ class ImageFetcher:
                 success, error, file_size, was_skipped = self.download_single_image(img_url, img_path, force)
                 
                 if success:
-                    self.stats['successful'] += 1
                     self.stats['total_size'] += file_size
                     if was_skipped:
                         self.stats['skipped'] += 1
+                    else:
+                        self.stats['downloaded'] += 1
                 else:
                     self.stats['failed'] += 1
                     failed_downloads.append({
@@ -525,9 +526,9 @@ class ImageFetcher:
         self.logger.info(f"Download Summary for {date_str}")
         self.logger.info("=" * 60)
         self.logger.info(f"Total files:      {self.stats['total_files']}")
-        self.logger.info(f"Successful:       {self.stats['successful']}")
-        self.logger.info(f"Failed:           {self.stats['failed']}")
+        self.logger.info(f"Downloaded:       {self.stats['downloaded']}")
         self.logger.info(f"Skipped:          {self.stats['skipped']} (already existed)")
+        self.logger.info(f"Failed:           {self.stats['failed']}")
         self.logger.info(f"Total size:       {total_mb:.2f} MB")
         self.logger.info(f"Duration:         {duration:.2f} seconds")
         self.logger.info(f"Average speed:    {speed_mbps:.2f} MB/s")
@@ -618,7 +619,7 @@ Examples:
     
     parser.add_argument(
         'date',
-        help='Date in YYYYMMDD format (e.g., 20251224)'
+        help='Date in YYYYMMDD format (e.g., 20251224). Acts as start date when --end-date is specified'
     )
     parser.add_argument(
         '--config',
