@@ -380,11 +380,11 @@ def main(night_dir: str, config_path: Optional[str] = None,
             if len(outliers) > 5:
                 print(f"  ... and {len(outliers) - 5} more")
     else:
-        # No frame dimensions could be determined from the sampled frames.
-        # This indicates that none of the sampled frames could be read by cv2.imread,
+        # No frame dimensions could be determined from any frames.
+        # This indicates that none of the frames could be read by cv2.imread,
         # even though the frame paths were found on disk.
         print(
-            "Error: Unable to read any of the first sampled frames for dimension checking. "
+            "Error: Unable to read any frames for dimension checking. "
             "Please verify that the frame files are valid images and accessible.",
             file=sys.stderr,
         )
