@@ -85,7 +85,7 @@ def overlay_streaks(frame_path: Path, streaks: list, output_path: Path,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Draw detected streaks on frame images from starplate-analysis",
+        description="Draw detected streaks on frame images from astroplate-analysis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

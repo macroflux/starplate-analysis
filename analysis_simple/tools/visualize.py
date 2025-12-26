@@ -168,7 +168,7 @@ def create_plots(data: dict, output_dir: Path, show: bool = False, event_thresho
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Visualize analysis metrics from starplate-analysis output",
+        description="Visualize analysis metrics from astroplate-analysis output",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

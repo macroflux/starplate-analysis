@@ -1,4 +1,4 @@
-# starplate-analysis
+# astroplate-analysis
 
 A collection of experimental tools for astronomical plate/time-lapse analysis to detect satellites, meteors, and other transient events.
 

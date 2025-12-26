@@ -1,6 +1,6 @@
 # Tools Directory
 
-This directory contains utility tools for the starplate-analysis repository. Each tool is self-contained with its own dependencies, configuration, and documentation.
+This directory contains utility tools for the astroplate-analysis repository. Each tool is self-contained with its own dependencies, configuration, and documentation.
 
 ## Available Tools
 

@@ -217,7 +217,7 @@ def print_summary(night_dir: Path, all_valid: bool):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Validate data structure for starplate-analysis",
+        description="Validate data structure for astroplate-analysis",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
