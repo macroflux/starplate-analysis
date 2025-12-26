@@ -45,6 +45,17 @@ This will install:
 
 **Important:** Run this tool from within the `analysis_simple/` directory.
 
+### Getting Data
+
+If you don't have data yet, use the data_fetch tool to download images:
+
+```bash
+cd ../tools/data_fetch
+python fetch.py 20251224
+```
+
+This automatically creates `../data/night_2025-12-24/frames/` and downloads all images.
+
 ### Basic Analysis
 
 Analyze a night's worth of frames:

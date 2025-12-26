@@ -39,7 +39,7 @@ See [`tools/README.md`](tools/README.md) for information about all utility tools
 
 ### Complete Workflow
 
-1. **Download Images** (if you don't have them yet):
+1. **Download Images**:
    ```bash
    cd tools/data_fetch
    pip install -r requirements.txt
@@ -51,6 +51,11 @@ See [`tools/README.md`](tools/README.md) for information about all utility tools
    cd ../../analysis_simple
    pip install -r requirements.txt
    python analyze.py ../data/night_2025-12-24/
+   ```
+
+3. **Visualize Results** (optional):
+   ```bash
+   python tools/visualize.py ../data/night_2025-12-24/
    ```
 
 ### Individual Tool Usage
@@ -71,7 +76,9 @@ Tools should be self-contained and independently runnable.
 
 ## Data
 
-The `data/` directory contains sample data structures and outputs shared across all tools. This is the common location where all analysis tools can generate and store their output images and results.
+The `data/` directory contains astronomical observation data organized by night. The `tools/data_fetch/` utility automatically creates and populates these directories when downloading images. All analysis tools read from and write to this common data location.
+
+See [`data/README.md`](data/README.md) for structure details.
 
 ## Contributing
 
