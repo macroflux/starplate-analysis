@@ -334,6 +334,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
     print(f"Found {len(frames)} frames. Checking dimensions...")
     frame_dims = {}
     frame_shapes = {}
+    failed_to_load = []
     # Read each frame once to determine its dimensions and count occurrences
     for f in frames:
         img = cv2.imread(str(f))
@@ -341,6 +342,16 @@ def main(night_dir: str, config_path: Optional[str] = None,
             shape = (img.shape[0], img.shape[1])
             frame_shapes[f] = shape
             frame_dims[shape] = frame_dims.get(shape, 0) + 1
+        else:
+            failed_to_load.append(f.name)
+
+    # Report frames that failed to load
+    if failed_to_load:
+        print(f"Warning: {len(failed_to_load)} frame(s) failed to load:")
+        for f in failed_to_load[:5]:  # Show first 5
+            print(f"  - {f}")
+        if len(failed_to_load) > 5:
+            print(f"  ... and {len(failed_to_load) - 5} more")
 
     if frame_dims:
         # Use the most common dimension
@@ -352,7 +363,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
         outliers = []
         for f in frames:
             shape = frame_shapes.get(f)
-            # If we couldn't read the frame (img was None), skip it silently as before
+            # Skip frames that failed to load (already reported above)
             if shape is None:
                 continue
             if shape == common_dim:
