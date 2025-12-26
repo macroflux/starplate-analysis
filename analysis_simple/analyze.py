@@ -379,6 +379,16 @@ def main(night_dir: str, config_path: Optional[str] = None,
                 print(f"  - {o}")
             if len(outliers) > 5:
                 print(f"  ... and {len(outliers) - 5} more")
+    else:
+        # No frame dimensions could be determined from any frames.
+        # This indicates that none of the frames could be read by cv2.imread,
+        # even though the frame paths were found on disk.
+        print(
+            "Error: Unable to read any frames for dimension checking. "
+            "Please verify that the frame files are valid images and accessible.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if not frames:
         print(f"Error: No valid frames remaining after filtering.", file=sys.stderr)
