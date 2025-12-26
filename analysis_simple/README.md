@@ -267,7 +267,7 @@ events:
 **Global configuration:**
 ```bash
 cd analysis_simple/
-cp config.yaml config.yaml  # Edit this file for global defaults
+# Edit config.yaml for global defaults
 ```
 
 **Night-specific configuration:**
