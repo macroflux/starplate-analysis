@@ -37,13 +37,18 @@ def load_config(config_path: Optional[Path] = None) -> dict:
     
     default_config = {
         "masking": {
-            "brightness_threshold": 10,
+            "brightness_threshold": 10,  # Keep for backward compatibility
             "overlay_region": {
                 "top": 0,
                 "bottom": 140,
                 "left": 0,
                 "right": 450
-            }
+            },
+            "sample_count": 60,
+            "low_percentile": 20,
+            "obstruction_threshold": 35,
+            "dilate_px": 8,
+            "resize_width": 0  # 0 = no resize (keep full resolution)
         },
         "analysis": {
             "gaussian_sigma": 5
@@ -79,27 +84,71 @@ def load_config(config_path: Optional[Path] = None) -> dict:
     
     return default_config
 
-def build_sky_mask(sample_img_path: Path, config: dict) -> np.ndarray:
+def build_sky_mask(frames: list[Path], config: dict) -> np.ndarray:
     """
-    One-time mask builder idea:
-    - exclude very dark pixels (housing)
-    - optionally exclude top-left overlay region
-    Save and reuse this mask each run.
+    Build a robust sky mask using multiple frames.
+
+    Uses a low-percentile image across the night to identify persistent
+    dark obstructions (trees, housing, blockers) and removes them.
     """
-    img = cv2.imread(str(sample_img_path))
-    if img is None:
-        raise ValueError(f"Could not read image: {sample_img_path}")
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    mcfg = config.get("masking", {})
+    overlay = mcfg.get("overlay_region", {"top": 0, "bottom": 140, "left": 0, "right": 450})
 
-    # crude sky vs housing mask
-    threshold = config["masking"]["brightness_threshold"]
-    mask = (gray > threshold).astype(np.uint8) * 255
+    # --- sampling ---
+    sample_count = int(mcfg.get("sample_count", 60))
+    low_percentile = float(mcfg.get("low_percentile", 20))
+    obstruction_thresh = int(mcfg.get("obstruction_threshold", 35))
+    dilate_px = int(mcfg.get("dilate_px", 8))
+    resize_width = int(mcfg.get("resize_width", 0))  # 0 = no resize
 
-    # remove overlay text region (tune these coords to your layout)
-    overlay = config["masking"]["overlay_region"]
-    mask[overlay["top"]:overlay["bottom"], overlay["left"]:overlay["right"]] = 0
+    paths = list(frames)
+    if len(paths) == 0:
+        raise ValueError("No frames provided to build_sky_mask()")
 
-    return mask
+    if len(paths) > sample_count:
+        idxs = np.linspace(0, len(paths) - 1, sample_count).astype(int)
+        sample = [paths[i] for i in idxs]
+    else:
+        sample = paths
+
+    grays = []
+    for p in sample:
+        img = cv2.imread(str(p))
+        if img is None:
+            continue
+        if resize_width and img.shape[1] > resize_width:
+            scale = resize_width / img.shape[1]
+            img = cv2.resize(img, (resize_width, int(img.shape[0] * scale)))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        grays.append(gray)
+
+    if len(grays) < 5:
+        raise ValueError("Not enough readable sample frames to build a mask.")
+
+    stack = np.stack(grays, axis=0)  # (N,H,W)
+
+    # --- persistent obstruction via low percentile ---
+    low = np.percentile(stack, low_percentile, axis=0).astype(np.uint8)
+
+    obstruction = (low < obstruction_thresh).astype(np.uint8) * 255
+    sky = cv2.bitwise_not(obstruction)
+
+    # --- remove overlay region ---
+    sky[overlay["top"]:overlay["bottom"], overlay["left"]:overlay["right"]] = 0
+
+    # --- morphology cleanup ---
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    sky = cv2.morphologyEx(sky, cv2.MORPH_CLOSE, k, iterations=1)
+    sky = cv2.morphologyEx(sky, cv2.MORPH_OPEN,  k, iterations=1)
+
+    # --- safety dilation of excluded regions (reduces tree edge leak) ---
+    if dilate_px > 0:
+        inv = cv2.bitwise_not(sky)
+        kd = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilate_px*2+1, dilate_px*2+1))
+        inv = cv2.dilate(inv, kd, iterations=1)
+        sky = cv2.bitwise_not(inv)
+
+    return sky
 
 def star_contrast_score(gray: np.ndarray, mask: np.ndarray, config: dict) -> float:
     # high-pass: stars increase local contrast
@@ -204,8 +253,8 @@ def main(night_dir: str, config_path: Optional[str] = None,
             raise ValueError(f"Could not load mask from {mask_path}")
         print(f"Loaded existing sky mask from {mask_path}")
     else:
-        print(f"Building sky mask from first frame...")
-        mask = build_sky_mask(frames[0], config)
+        print(f"Building sky mask from multiple frames...")
+        mask = build_sky_mask(frames, config)
         cv2.imwrite(str(mask_path), mask)
         print(f"Saved sky mask to {mask_path}")
 
