@@ -13,16 +13,47 @@ data/
 │   │   ├── frame_001.jpg
 │   │   ├── frame_002.jpg
 │   │   └── ...
-│   ├── sky_mask.png         # OUTPUT: Generated mask
-│   ├── metrics.csv          # OUTPUT: Per-frame statistics
-│   ├── events.json          # OUTPUT: Detected events
-│   └── plots/               # OUTPUT: Visualization plots
-│       ├── brightness_over_time.png
-│       ├── contrast_over_time.png
-│       └── streak_counts.png
+│   ├── masks/               # OUTPUT: Analysis masks
+│   │   ├── sky_mask.png
+│   │   ├── persistent_edges.png
+│   │   └── combined_mask.png
+│   ├── data/                # OUTPUT: Structured data files
+│   │   ├── metrics.csv      # Per-frame statistics with focus_score and interest_score
+│   │   ├── events.json      # Detected transient events
+│   │   └── activity_windows.json  # Detected activity periods (NEW)
+│   ├── activity/            # OUTPUT: Per-window artifacts (NEW)
+│   │   ├── window_00_0045_0089/
+│   │   │   ├── timelapse_window.mp4
+│   │   │   ├── keogram.png
+│   │   │   └── startrails.png
+│   │   └── window_01_0234_0267/
+│   │       ├── timelapse_window.mp4
+│   │       ├── keogram.png
+│   │       └── startrails.png
+│   ├── plots/               # OUTPUT: Visualization plots
+│   │   ├── brightness_over_time.png
+│   │   ├── contrast_over_time.png
+│   │   └── streak_counts.png
+│   ├── annotated/           # OUTPUT: Frames with detected streaks overlaid
+│   │   ├── frame_002.jpg
+│   │   └── ...
+│   └── timelapse/           # OUTPUT: Full-night timelapse videos (NEW)
+│       └── timelapse_annotated.mp4
 └── night_YYYY-MM-DD/        # Additional observation nights
     └── ...
 ```
+
+### New in v2.0
+
+- **masks/** - Organized directory for analysis masks (sky_mask.png, persistent_edges.png, combined_mask.png)
+- **data/** - Structured data outputs optimized for ML workflows
+  - `metrics.csv` - Now includes `focus_score`, `interest_score`, and `z_streak` columns
+  - `activity_windows.json` - Automatically detected high-interest time periods
+- **activity/** - Per-window artifacts for each detected activity period
+  - Timelapse videos of just the activity window
+  - Keograms showing motion over time
+  - Startrail composites
+- **timelapse/** - Organized location for full-night timelapse videos
 
 ## Usage
 
