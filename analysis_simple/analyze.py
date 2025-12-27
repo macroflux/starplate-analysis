@@ -9,6 +9,22 @@ import argparse
 import yaml
 import sys
 import importlib.util
+from itertools import chain
+
+# Import timelapse module for video generation
+try:
+    from tools.timelapse import build_timelapse
+except ImportError:
+    # Fallback for different directory structures
+    timelapse_path = Path(__file__).parent / "tools" / "timelapse.py"
+    if timelapse_path.exists():
+        spec = importlib.util.spec_from_file_location("timelapse", timelapse_path)
+        if spec and spec.loader:
+            timelapse = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(timelapse)
+            build_timelapse = timelapse.build_timelapse
+    else:
+        build_timelapse = None
 
 def load_config(config_path: Optional[Path] = None) -> dict:
     """
@@ -327,8 +343,43 @@ def run_tool_script(tool_path: Path, night_dir: Path, **kwargs):
         print(f"Warning: Could not load tool {tool_path.name}: {e}", file=sys.stderr)
         return False
 
+def build_timelapse_video(
+    frames_dir: Path,
+    out_mp4: Path,
+    fps: int = 30,
+    pattern: str = "*.jpg",
+    quality: int = 8
+) -> bool:
+    """
+    Build an MP4 timelapse from image frames using OpenCV VideoWriter.
+    
+    This is a wrapper around tools.timelapse.build_timelapse for backward compatibility.
+    
+    Args:
+        frames_dir: Directory containing image frames
+        out_mp4: Output MP4 path
+        fps: Frames per second
+        pattern: Glob pattern for frames (default *.jpg)
+        quality: Video quality parameter (currently not applied to encoding; reserved for future CRF mapping)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if build_timelapse is None:
+        print("Error: Could not import timelapse module", file=sys.stderr)
+        return False
+    
+    return build_timelapse(
+        frames_dir=frames_dir,
+        output_path=out_mp4,
+        fps=fps,
+        pattern=pattern,
+        quality=quality,
+        verbose=True
+    )
+
 def main(night_dir: str, config_path: Optional[str] = None, 
-         validate: bool = False, visualize: bool = False, overlay: bool = False):
+         validate: bool = False, visualize: bool = False, overlay: bool = False, timelapse: bool = False):
     """
     Analyze astronomical time-lapse frames for transient events.
     
@@ -338,6 +389,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
         validate: Run validation checks before analysis
         visualize: Generate plots after analysis
         overlay: Create annotated images with detected streaks after analysis
+        timelapse: Generate MP4 timelapse video after analysis
     """
     # Run validation if requested
     if validate:
@@ -611,6 +663,37 @@ def main(night_dir: str, config_path: Optional[str] = None,
             print(f"Warning: overlay_streaks.py not found at {overlay_script}", file=sys.stderr)
     elif overlay and len(events) == 0:
         print("\nNote: No events detected, skipping overlay generation.")
+    
+    if timelapse:
+        print("\n" + "="*60)
+        print("Generating timelapse videos...")
+        print("="*60)
+        
+        # Get timelapse settings from config
+        timelapse_config = config.get("timelapse", {})
+        fps = int(timelapse_config.get("fps", 30))
+        quality = int(timelapse_config.get("quality", 8))
+        
+        # Generate raw frames timelapse
+        raw_mp4 = night / "timelapse_raw.mp4"
+        if build_timelapse_video(frames_dir, raw_mp4, fps=fps, quality=quality):
+            print(f"  Raw timelapse saved to: {raw_mp4}")
+        
+        # Generate annotated frames timelapse if overlay was created
+        annotated_dir = night / "annotated"
+        # Ensure the annotated directory actually contains image frames before building timelapse
+        has_annotated_frames = False
+        if annotated_dir.exists():
+            # Use chain to short-circuit on first match across multiple patterns
+            has_annotated_frames = any(chain(
+                annotated_dir.glob("*.png"),
+                annotated_dir.glob("*.jpg"),
+                annotated_dir.glob("*.jpeg")
+            ))
+        if overlay and len(events) > 0 and has_annotated_frames:
+            annotated_mp4 = night / "timelapse_annotated.mp4"
+            if build_timelapse_video(annotated_dir, annotated_mp4, fps=fps, quality=quality):
+                print(f"  Annotated timelapse saved to: {annotated_mp4}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -658,7 +741,12 @@ Output files:
     parser.add_argument(
         "--all-tools",
         action="store_true",
-        help="Run all optional tools (validation, visualization, and overlay)"
+        help='Run all optional tools (validation, visualization, overlay, and timelapse)'
+    )
+    parser.add_argument(
+        '--timelapse',
+        action='store_true',
+        help='Generate MP4 timelapse videos from frames and annotated images'
     )
     
     args = parser.parse_args()
@@ -668,5 +756,6 @@ Output files:
         args.validate = True
         args.visualize = True
         args.overlay = True
+        args.timelapse = True
     
-    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay)
+    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay, args.timelapse)

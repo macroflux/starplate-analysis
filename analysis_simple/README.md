@@ -22,6 +22,7 @@ The analysis pipeline processes JPEG frames, builds a sky mask to exclude non-sk
 - **Metrics Tracking**: Records brightness, contrast, and streak counts per frame
 - **Event Cataloging**: Identifies and logs frames with significant transient activity
 - **Visualization Tools**: Plot metrics over time and overlay detected streaks on images
+- **Timelapse Generation**: Create MP4 videos from raw or annotated frame sequences
 - **Validation Utilities**: Check data structure and image quality before analysis
 - **Portable**: Automatically adapts to different camera locations and orientations
 
@@ -39,7 +40,7 @@ pip install -r requirements.txt
 ```
 
 This will install:
-- `opencv-python` - Image processing and computer vision
+- `opencv-python` - Image processing, computer vision, and video encoding
 - `numpy` - Numerical operations
 - `matplotlib` - Plotting and visualization
 - `PyYAML` - Configuration file parsing
@@ -80,6 +81,7 @@ This will:
 2. **Analyze** all frames and detect transient events
 3. **Visualize** metrics with time-series plots
 4. **Overlay** detected streaks on event frames
+5. **Generate** timelapse videos from raw and annotated frames
 
 #### Individual Tool Options
 
@@ -95,8 +97,11 @@ python analysis_simple/analyze.py data/night_2025-12-24/ --visualize
 # Create annotated frames with detected streaks
 python analysis_simple/analyze.py data/night_2025-12-24/ --overlay
 
+# Generate timelapse videos
+python analysis_simple/analyze.py data/night_2025-12-24/ --timelapse
+
 # Combine multiple options
-python analysis_simple/analyze.py data/night_2025-12-24/ --validate --visualize
+python analysis_simple/analyze.py data/night_2025-12-24/ --validate --visualize --timelapse
 ```
 
 #### With Custom Configuration
@@ -132,9 +137,11 @@ night_2025-12-24/
 │   ├── brightness_over_time.png
 │   ├── contrast_over_time.png
 │   └── streak_counts.png
-└── annotated/            (generated with --overlay)
-    ├── frame_002.jpg     (streak count shown in top right)
-    └── ...
+├── annotated/            (generated with --overlay)
+│   ├── frame_002.jpg     (streak count shown in top right)
+│   └── ...
+├── timelapse_raw.mp4     (generated with --timelapse)
+└── timelapse_annotated.mp4  (generated with --timelapse + --overlay)
 ```
 
 **Required:**
@@ -155,6 +162,10 @@ night_2025-12-24/
 
 **Generated with --overlay:**
 - `annotated/` - Directory containing frames with detected streaks drawn
+
+**Generated with --timelapse:**
+- `timelapse_raw.mp4` - MP4 video timelapse of all raw frames
+- `timelapse_annotated.mp4` - MP4 video timelapse of annotated frames (if --overlay also used)
 
 ## Output Files
 
@@ -283,6 +294,10 @@ streak_detection:
 
 events:
   min_streaks: 2                # Minimum streaks to flag as an event
+
+timelapse:
+  fps: 30                       # Frames per second for video output
+  quality: 8                    # Video quality 0-10 (lower = higher quality)
 ```
 
 ### Creating Custom Configuration
@@ -430,6 +445,43 @@ Creates annotated images in `data/night_2025-12-24/annotated/` with detected str
 Optional flags:
 - `--output <dir>` - Specify custom output directory
 
+### Generate Timelapse Videos
+
+Create MP4 timelapse videos from frame sequences:
+
+**Integrated method (recommended):**
+```bash
+# Generate both raw and annotated timelapses (if --overlay also used)
+python analysis_simple/analyze.py data/night_2025-12-24/ --timelapse --overlay
+
+# Or just raw frames
+python analysis_simple/analyze.py data/night_2025-12-24/ --timelapse
+```
+
+**Standalone method:**
+```bash
+# Timelapse from raw frames
+python analysis_simple/tools/timelapse.py data/night_2025-12-24/frames/
+
+# Timelapse from annotated frames
+python analysis_simple/tools/timelapse.py data/night_2025-12-24/annotated/ --output annotated.mp4
+
+# Custom settings
+python analysis_simple/tools/timelapse.py data/night_2025-12-24/frames/ \
+    --output night.mp4 --fps 25 --quality 5
+```
+
+Generates:
+- `timelapse_raw.mp4` - Video of all raw frames (integrated mode)
+- `timelapse_annotated.mp4` - Video of annotated frames (if --overlay used)
+
+Optional flags (standalone):
+- `--output <path>` - Output MP4 file path
+- `--fps <int>` - Frames per second (default: 30)
+- `--quality <0-10>` - Video quality, lower=higher (default: 8)
+- `--pattern <glob>` - Frame file pattern (default: *.jpg)
+- `--quiet` - Suppress progress messages
+
 ## Validation
 
 Before running analysis, validate your data structure:
@@ -500,8 +552,13 @@ See `../data/night_2025-12-24/` for a sample data structure with example outputs
 - Run validation to identify problematic frames: `--validate`
 
 ### Memory issues with large datasets
-- Process nights in smaller batches
-- Reduce image resolution before analysis
+- Consider reducing `sample_count` values in configuration
+- Process nights individually rather than batch processing
+
+### Video generation issues
+- Timelapse generation uses OpenCV's VideoWriter with H.264 codec (avc1)
+- If videos won't play, your system may need codec support
+- All dependencies are already included with opencv-python
 - Monitor progress output to identify problematic frames
 
 ### Tool scripts not running
