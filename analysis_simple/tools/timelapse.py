@@ -13,7 +13,6 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
 
 try:
     import cv2
@@ -39,7 +38,7 @@ def build_timelapse(
         output_path: Output MP4 path
         fps: Frames per second (default 30)
         pattern: Glob pattern for frames (default *.jpg)
-        quality: Video quality 0-10, lower = higher quality (default 8)
+        quality: Video quality parameter (currently not applied to encoding; reserved for future CRF mapping)
         verbose: Print progress messages (default True)
         
     Returns:
@@ -76,8 +75,8 @@ def build_timelapse(
         
         height, width = first_frame.shape[:2]
         
-        # Map quality (0-10, lower=better) to CRF-like behavior
-        # For simplicity with VideoWriter, we just use the codec defaults
+        # Note: quality parameter is reserved for future CRF mapping
+        # Currently using codec defaults with VideoWriter
         
         # Create VideoWriter with H.264 codec
         fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
@@ -96,6 +95,8 @@ def build_timelapse(
             img = cv2.imread(str(frame_path))
             if img is not None:
                 writer.write(img)
+            else:
+                print(f"Warning: Skipping unreadable frame: {frame_path}", file=sys.stderr)
         
         writer.release()
         

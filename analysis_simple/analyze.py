@@ -10,6 +10,22 @@ import yaml
 import sys
 import importlib.util
 
+# Import timelapse module for video generation
+try:
+    from tools.timelapse import build_timelapse
+except ImportError:
+    # Fallback for different directory structures
+    import importlib.util
+    timelapse_path = Path(__file__).parent / "tools" / "timelapse.py"
+    if timelapse_path.exists():
+        spec = importlib.util.spec_from_file_location("timelapse", timelapse_path)
+        if spec and spec.loader:
+            timelapse = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(timelapse)
+            build_timelapse = timelapse.build_timelapse
+    else:
+        build_timelapse = None
+
 def load_config(config_path: Optional[Path] = None) -> dict:
     """
     Load configuration from YAML file.
@@ -337,61 +353,30 @@ def build_timelapse_video(
     """
     Build an MP4 timelapse from image frames using OpenCV VideoWriter.
     
+    This is a wrapper around tools.timelapse.build_timelapse for backward compatibility.
+    
     Args:
         frames_dir: Directory containing image frames
         out_mp4: Output MP4 path
         fps: Frames per second
         pattern: Glob pattern for frames (default *.jpg)
-        quality: Video quality 0-10 (lower = higher quality) - mapped to CRF
+        quality: Video quality parameter (currently not applied to encoding; reserved for future CRF mapping)
         
     Returns:
         True if successful, False otherwise
     """
-    try:
-        frames = sorted(frames_dir.glob(pattern))
-        if not frames:
-            print(f"Warning: No frames found in {frames_dir} matching {pattern}", file=sys.stderr)
-            return False
-        
-        print(f"Building MP4 timelapse: {len(frames)} frames @ {fps} fps")
-        print(f"Output: {out_mp4}")
-        
-        # Read first frame to get dimensions
-        first_frame = cv2.imread(str(frames[0]))
-        if first_frame is None:
-            print(f"Error: Could not read first frame: {frames[0]}", file=sys.stderr)
-            return False
-        
-        height, width = first_frame.shape[:2]
-        
-        # Map quality (0-10, lower=better) to CRF (higher=worse quality, lower file size)
-        # CRF range: 0 (lossless) to 51 (worst), typical: 18-28
-        crf = int(18 + (quality * 3))  # Maps: 0->18 (high), 5->33 (medium), 10->48 (low)
-        
-        # Create VideoWriter with H.264 codec
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
-        writer = cv2.VideoWriter(str(out_mp4), fourcc, fps, (width, height))
-        
-        if not writer.isOpened():
-            print(f"Error: Could not create video writer", file=sys.stderr)
-            return False
-        
-        # Write frames
-        for i, f in enumerate(frames, 1):
-            if i % 50 == 0 or i == len(frames):
-                print(f"  Encoding: {i}/{len(frames)} ({100*i//len(frames)}%)")
-            
-            img = cv2.imread(str(f))
-            if img is not None:
-                writer.write(img)
-        
-        writer.release()
-        print(f"Saved timelapse to: {out_mp4}")
-        return True
-        
-    except Exception as e:
-        print(f"Error creating timelapse: {e}", file=sys.stderr)
+    if build_timelapse is None:
+        print("Error: Could not import timelapse module", file=sys.stderr)
         return False
+    
+    return build_timelapse(
+        frames_dir=frames_dir,
+        output_path=out_mp4,
+        fps=fps,
+        pattern=pattern,
+        quality=quality,
+        verbose=True
+    )
 
 def main(night_dir: str, config_path: Optional[str] = None, 
          validate: bool = False, visualize: bool = False, overlay: bool = False, timelapse: bool = False):
@@ -696,7 +681,16 @@ def main(night_dir: str, config_path: Optional[str] = None,
         
         # Generate annotated frames timelapse if overlay was created
         annotated_dir = night / "annotated"
-        if overlay and annotated_dir.exists() and len(events) > 0:
+        # Ensure the annotated directory actually contains image frames before building timelapse
+        has_annotated_frames = (
+            annotated_dir.exists()
+            and (
+                any(annotated_dir.glob("*.png"))
+                or any(annotated_dir.glob("*.jpg"))
+                or any(annotated_dir.glob("*.jpeg"))
+            )
+        )
+        if overlay and len(events) > 0 and has_annotated_frames:
             annotated_mp4 = night / "timelapse_annotated.mp4"
             if build_timelapse_video(annotated_dir, annotated_mp4, fps=fps, quality=quality):
                 print(f"  Annotated timelapse saved to: {annotated_mp4}")

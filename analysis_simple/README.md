@@ -559,8 +559,6 @@ See `../data/night_2025-12-24/` for a sample data structure with example outputs
 - Timelapse generation uses OpenCV's VideoWriter with H.264 codec (avc1)
 - If videos won't play, your system may need codec support
 - All dependencies are already included with opencv-python
-- Process nights in smaller batches
-- Reduce image resolution before analysis
 - Monitor progress output to identify problematic frames
 
 ### Tool scripts not running
