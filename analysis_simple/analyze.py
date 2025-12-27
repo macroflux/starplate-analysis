@@ -12,13 +12,16 @@ import importlib.util
 
 def load_config(config_path: Optional[Path] = None) -> dict:
     """
-    Load configuration from YAML file or use defaults.
+    Load configuration from YAML file.
     
     Args:
         config_path: Path to config.yaml file. If None, looks for config.yaml in current directory.
     
     Returns:
         Configuration dictionary with all parameters.
+    
+    Raises:
+        FileNotFoundError: If config file doesn't exist
     """
     import copy
     
@@ -35,62 +38,81 @@ def load_config(config_path: Optional[Path] = None) -> dict:
                 result[key] = value
         return result
     
-    default_config = {
-        "masking": {
-            "brightness_threshold": 10,  # Keep for backward compatibility
-            "overlay_region": {
-                "top": 0,
-                "bottom": 140,
-                "left": 0,
-                "right": 450
-            },
-            "sample_count": 60,
-            "low_percentile": 20,
-            "obstruction_threshold": 35,
-            "dilate_px": 8,
-            "resize_width": 0  # 0 = no resize (keep full resolution)
-        },
-        "persistent_edges": {
-            "sample_count": 80,
-            "canny_low": 40,
-            "canny_high": 120,
-            "hp_sigma": 2.0,
-            "keep_fraction": 0.20,  # edge must appear in >=20% of samples
-            "dilate_px": 6
-        },
-        "analysis": {
-            "gaussian_sigma": 5
-        },
-        "streak_detection": {
-            "canny_low": 40,
-            "canny_high": 120,
-            "hough_threshold": 60,
-            "min_line_length": 40,
-            "max_line_gap": 10
-        },
-        "events": {
-            "min_streaks": 2
-        }
-    }
-    
     if config_path is None:
         config_path = Path("config.yaml")
     
-    if config_path.exists():
-        try:
-            with open(config_path, 'r') as f:
-                loaded_config = yaml.safe_load(f)
-                # Perform recursive deep merge
-                if loaded_config:
-                    default_config = deep_merge(default_config, loaded_config)
-                print(f"Loaded configuration from {config_path}")
-        except Exception as e:
-            print(f"Warning: Could not load config from {config_path}: {e}")
-            print("Using default configuration.")
-    else:
-        print(f"Config file {config_path} not found. Using default configuration.")
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Configuration file not found: {config_path}\n"
+            f"Please create a config.yaml file with required parameters."
+        )
     
-    return default_config
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+            if not config:
+                raise ValueError(f"Config file {config_path} is empty")
+            print(f"Loaded configuration from {config_path}")
+            return config
+    except Exception as e:
+        raise RuntimeError(f"Error loading config from {config_path}: {e}")
+
+def fill_holes(binary_255: np.ndarray) -> np.ndarray:
+    """
+    Fill holes in a binary 0/255 mask using flood fill from the border.
+    
+    Args:
+        binary_255: Binary mask with values 0 or 255
+    
+    Returns:
+        Binary mask with holes filled
+    """
+    mask = binary_255.copy()
+    h, w = mask.shape
+
+    # Floodfill needs a mask 2px larger than the image
+    ff = np.zeros((h + 2, w + 2), np.uint8)
+
+    # Flood-fill the background from (0,0)
+    flood = mask.copy()
+    cv2.floodFill(flood, ff, seedPoint=(0, 0), newVal=255)
+
+    # Invert floodfilled image: holes become white
+    flood_inv = cv2.bitwise_not(flood)
+
+    # Combine original with holes
+    filled = cv2.bitwise_or(mask, flood_inv)
+    return filled
+
+def remove_small_components(binary_255: np.ndarray, min_area: int = 800) -> np.ndarray:
+    """
+    Remove small connected components from a binary 0/255 image.
+
+    This is used to drop tiny edge specks (often stars/noise) before we
+    fill holes / thicken structures.
+
+    Args:
+        binary_255: Binary mask with values 0 or 255
+        min_area: Minimum pixel area for a component to be kept
+
+    Returns:
+        Binary mask with small components removed
+    """
+    if min_area <= 0:
+        return binary_255
+
+    # Ensure we are working with 0/255 uint8
+    img = (binary_255 > 0).astype(np.uint8) * 255
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(img, connectivity=8)
+
+    out = np.zeros_like(img, dtype=np.uint8)
+    for i in range(1, num_labels):  # skip background label 0
+        area = stats[i, cv2.CC_STAT_AREA]
+        if area >= min_area:
+            out[labels == i] = 255
+
+    return out
 
 def build_sky_mask(frames: List[Path], config: dict) -> np.ndarray:
     """
@@ -147,10 +169,18 @@ def build_sky_mask(frames: List[Path], config: dict) -> np.ndarray:
 
     stack = np.stack(grays, axis=0)  # (N,H,W)
 
-    # --- persistent obstruction via low percentile ---
+    # --- persistent obstruction via low percentile (dark obstructions) ---
     low = np.percentile(stack, low_percentile, axis=0).astype(np.uint8)
+    dark_obs = (low < obstruction_thresh)
 
-    obstruction = (low < obstruction_thresh).astype(np.uint8) * 255
+    # --- persistent bright areas (lit trees, foreground) ---
+    high_percentile = float(mcfg.get("high_percentile", 95))
+    bright_thresh = int(mcfg.get("bright_obstruction_threshold", 235))
+    high = np.percentile(stack, high_percentile, axis=0).astype(np.uint8)
+    bright_obs = (high > bright_thresh)
+
+    # Combine dark and bright obstructions
+    obstruction = (dark_obs | bright_obs).astype(np.uint8) * 255
     sky = cv2.bitwise_not(obstruction)
 
     # --- remove overlay region ---
@@ -231,11 +261,25 @@ def build_persistent_edge_mask(frames: List[Path], sky_mask: np.ndarray, config:
     thresh = max(1, int(np.ceil(keep_fraction * used)))
     persistent = (edge_sum >= thresh).astype(np.uint8) * 255
 
+    # 1) Dilate to thicken the edge map
     if dilate_px > 0:
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilate_px*2+1, dilate_px*2+1))
         persistent = cv2.dilate(persistent, k, iterations=1)
 
-    # make sure we only persist inside the sky_mask region
+    # 2) CLOSE to connect nearby edge fragments (trees benefit a lot here)
+    close_px = int(pcfg.get("close_px", max(8, dilate_px)))
+    kc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_px*2+1, close_px*2+1))
+    persistent = cv2.morphologyEx(persistent, cv2.MORPH_CLOSE, kc, iterations=1)
+
+    # 3) Remove tiny specks (stars/noise) BEFORE we fill holes.
+    #    This prevents "edge speckle" from turning into giant filled regions.
+    min_component_area = int(pcfg.get("min_component_area", 800))
+    persistent = remove_small_components(persistent, min_area=min_component_area)
+
+    # 4) Fill enclosed regions (turn outlines into solid blocks)
+    persistent = fill_holes(persistent)
+
+    # Constrain to sky_mask region
     persistent = cv2.bitwise_and(persistent, persistent, mask=sky_mask)
 
     return persistent
@@ -395,18 +439,39 @@ def main(night_dir: str, config_path: Optional[str] = None,
         sys.exit(1)
     print(f"Processing {len(frames)} frames with consistent dimensions.")
     
-    # Load configuration after validation
-    # Priority: 1) explicit --config arg, 2) night_dir/config.yaml, 3) analyze.py dir/config.yaml
+    # Load configuration with proper priority
+    # Base: script_dir/config.yaml (required)
+    # Override: night_dir/config.yaml (if exists, merges on top)
+    # Final override: explicit --config argument (if provided, replaces base)
+    
+    import copy
+    
+    def deep_merge(base: dict, update: dict) -> dict:
+        """Recursively merge update dict into base dict."""
+        result = copy.deepcopy(base)
+        for key, value in update.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+    
+    script_dir = Path(__file__).parent
+    base_config_path = script_dir / "config.yaml"
+    
     if config_path:
+        # Explicit --config overrides everything
         config = load_config(Path(config_path))
     else:
+        # Load base config from script directory (required)
+        config = load_config(base_config_path)
+        
+        # If night directory has a config, merge it on top of base
         night_config = night / "config.yaml"
         if night_config.exists():
-            config = load_config(night_config)
-        else:
-            # Look in same directory as analyze.py
-            script_dir = Path(__file__).parent
-            config = load_config(script_dir / "config.yaml")
+            print(f"Merging night-specific configuration from {night_config}")
+            night_settings = load_config(night_config)
+            config = deep_merge(config, night_settings)
     
     # Frames are now validated and configuration is loaded; proceed to rebuild masks.
 
@@ -572,7 +637,7 @@ Output files:
     )
     parser.add_argument(
         "-c", "--config",
-        help="Path to configuration YAML file (default: ./config.yaml)",
+        help="Path to configuration YAML file (default: config.yaml)",
         default=None
     )
     parser.add_argument(
