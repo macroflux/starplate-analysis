@@ -15,7 +15,6 @@ try:
     from tools.timelapse import build_timelapse
 except ImportError:
     # Fallback for different directory structures
-    import importlib.util
     timelapse_path = Path(__file__).parent / "tools" / "timelapse.py"
     if timelapse_path.exists():
         spec = importlib.util.spec_from_file_location("timelapse", timelapse_path)
@@ -682,14 +681,15 @@ def main(night_dir: str, config_path: Optional[str] = None,
         # Generate annotated frames timelapse if overlay was created
         annotated_dir = night / "annotated"
         # Ensure the annotated directory actually contains image frames before building timelapse
-        has_annotated_frames = (
-            annotated_dir.exists()
-            and (
-                any(annotated_dir.glob("*.png"))
-                or any(annotated_dir.glob("*.jpg"))
-                or any(annotated_dir.glob("*.jpeg"))
-            )
-        )
+        has_annotated_frames = False
+        if annotated_dir.exists():
+            # Use itertools chain to short-circuit on first match
+            from itertools import chain
+            has_annotated_frames = any(chain(
+                annotated_dir.glob("*.png"),
+                annotated_dir.glob("*.jpg"),
+                annotated_dir.glob("*.jpeg")
+            ))
         if overlay and len(events) > 0 and has_annotated_frames:
             annotated_mp4 = night / "timelapse_annotated.mp4"
             if build_timelapse_video(annotated_dir, annotated_mp4, fps=fps, quality=quality):
