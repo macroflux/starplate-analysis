@@ -1,4 +1,83 @@
-# analyze.py
+"""
+Astronomical Time-Lapse Analysis Pipeline with Activity Detection
+
+This module provides a comprehensive computer vision pipeline for analyzing astronomical
+time-lapse images to detect and catalog transient events such as satellites, meteors,
+and aircraft. The pipeline includes automatic activity window detection using interest
+scoring to identify high-value observation periods.
+
+Workflow Overview
+-----------------
+1. **Mask Building**
+   - Sky mask: Exclude camera housing, overlays, and dark obstructions
+   - Persistent edge mask: Exclude static structures (trees, buildings, wires)
+   - Combined mask: Final analysis region
+
+2. **Frame Analysis**
+   - Compute per-frame metrics: brightness, contrast, focus, streak count
+   - Detect linear streaks using Canny edge detection and Hough transforms
+   - Apply combined mask to exclude false positives from static structures
+
+3. **Activity Detection**
+   - Compute interest scores: weighted combination of metrics and changes
+   - Detect activity windows: contiguous periods above interest threshold
+   - Generate per-window artifacts: timelapses, keograms, startrails
+
+4. **Output Generation**
+   - Structured data files: metrics.csv, events.json, activity_windows.json
+   - Analysis masks: sky_mask.png, persistent_edges.png, combined_mask.png
+   - Per-window artifacts: timelapse, keogram, startrail for each activity period
+   - Optional: time-series plots, annotated frames, full-night timelapses
+
+Output Structure
+----------------
+night_YYYY-MM-DD/
+├── frames/              # INPUT: Raw image sequence
+├── masks/               # Analysis masks (sky, persistent edges, combined)
+├── data/                # Structured data outputs (metrics, events, windows)
+├── activity/            # Per-window artifacts for high-interest periods
+├── plots/               # Time-series visualizations (optional)
+├── annotated/           # Frames with detected streaks overlaid (optional)
+└── timelapse/           # Full-night timelapse videos (optional)
+
+Machine Learning Preparation
+----------------------------
+The structured outputs are designed for ML workflows:
+
+- **Training Data Extraction**: Use activity_windows.json to identify high-value frames
+- **Feature Engineering**: metrics.csv provides per-frame features with interest scores
+- **Event Classification**: events.json contains labeled transient events with coordinates
+- **Automated Annotation**: Per-window keograms and startrails aid visual validation
+- **Balanced Sampling**: Easy positive/negative split using activity windows
+
+Configuration
+-------------
+All parameters are configurable via config.yaml:
+
+- masking: Sky mask and persistent edge detection parameters
+- streak_detection: Canny and Hough transform thresholds
+- windows: Activity detection thresholds and weights
+- keogram: Center column sampling width
+- startrails: Gamma correction for visibility enhancement
+- timelapse: Video FPS and quality settings
+
+See README.md for comprehensive configuration documentation and tuning guidance.
+
+Usage
+-----
+Basic analysis:
+    python analyze.py night_2025-12-24/
+
+With all optional tools:
+    python analyze.py night_2025-12-24/ --all-tools
+
+Custom configuration:
+    python analyze.py night_2025-12-24/ --config custom_config.yaml
+
+For detailed usage, configuration, and ML integration examples, see:
+    analysis_simple/README.md
+"""
+
 import cv2
 import json
 import csv
