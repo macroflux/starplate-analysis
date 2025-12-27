@@ -34,3 +34,7 @@ streak_detection:
 
 events:
   min_streaks: 2
+
+timelapse:
+  fps: 30
+  quality: 8  # 0-10, lower = higher quality

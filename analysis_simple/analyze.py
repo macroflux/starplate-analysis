@@ -327,8 +327,74 @@ def run_tool_script(tool_path: Path, night_dir: Path, **kwargs):
         print(f"Warning: Could not load tool {tool_path.name}: {e}", file=sys.stderr)
         return False
 
+def build_timelapse_video(
+    frames_dir: Path,
+    out_mp4: Path,
+    fps: int = 30,
+    pattern: str = "*.jpg",
+    quality: int = 8
+) -> bool:
+    """
+    Build an MP4 timelapse from image frames using OpenCV VideoWriter.
+    
+    Args:
+        frames_dir: Directory containing image frames
+        out_mp4: Output MP4 path
+        fps: Frames per second
+        pattern: Glob pattern for frames (default *.jpg)
+        quality: Video quality 0-10 (lower = higher quality) - mapped to CRF
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        frames = sorted(frames_dir.glob(pattern))
+        if not frames:
+            print(f"Warning: No frames found in {frames_dir} matching {pattern}", file=sys.stderr)
+            return False
+        
+        print(f"Building MP4 timelapse: {len(frames)} frames @ {fps} fps")
+        print(f"Output: {out_mp4}")
+        
+        # Read first frame to get dimensions
+        first_frame = cv2.imread(str(frames[0]))
+        if first_frame is None:
+            print(f"Error: Could not read first frame: {frames[0]}", file=sys.stderr)
+            return False
+        
+        height, width = first_frame.shape[:2]
+        
+        # Map quality (0-10, lower=better) to CRF (higher=worse quality, lower file size)
+        # CRF range: 0 (lossless) to 51 (worst), typical: 18-28
+        crf = int(18 + (quality * 3))  # Maps: 0->18 (high), 5->33 (medium), 10->48 (low)
+        
+        # Create VideoWriter with H.264 codec
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
+        writer = cv2.VideoWriter(str(out_mp4), fourcc, fps, (width, height))
+        
+        if not writer.isOpened():
+            print(f"Error: Could not create video writer", file=sys.stderr)
+            return False
+        
+        # Write frames
+        for i, f in enumerate(frames, 1):
+            if i % 50 == 0 or i == len(frames):
+                print(f"  Encoding: {i}/{len(frames)} ({100*i//len(frames)}%)")
+            
+            img = cv2.imread(str(f))
+            if img is not None:
+                writer.write(img)
+        
+        writer.release()
+        print(f"Saved timelapse to: {out_mp4}")
+        return True
+        
+    except Exception as e:
+        print(f"Error creating timelapse: {e}", file=sys.stderr)
+        return False
+
 def main(night_dir: str, config_path: Optional[str] = None, 
-         validate: bool = False, visualize: bool = False, overlay: bool = False):
+         validate: bool = False, visualize: bool = False, overlay: bool = False, timelapse: bool = False):
     """
     Analyze astronomical time-lapse frames for transient events.
     
@@ -338,6 +404,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
         validate: Run validation checks before analysis
         visualize: Generate plots after analysis
         overlay: Create annotated images with detected streaks after analysis
+        timelapse: Generate MP4 timelapse video after analysis
     """
     # Run validation if requested
     if validate:
@@ -611,6 +678,28 @@ def main(night_dir: str, config_path: Optional[str] = None,
             print(f"Warning: overlay_streaks.py not found at {overlay_script}", file=sys.stderr)
     elif overlay and len(events) == 0:
         print("\nNote: No events detected, skipping overlay generation.")
+    
+    if timelapse:
+        print("\n" + "="*60)
+        print("Generating timelapse videos...")
+        print("="*60)
+        
+        # Get timelapse settings from config
+        timelapse_config = config.get("timelapse", {})
+        fps = int(timelapse_config.get("fps", 30))
+        quality = int(timelapse_config.get("quality", 8))
+        
+        # Generate raw frames timelapse
+        raw_mp4 = night / "timelapse_raw.mp4"
+        if build_timelapse_video(frames_dir, raw_mp4, fps=fps, quality=quality):
+            print(f"  Raw timelapse saved to: {raw_mp4}")
+        
+        # Generate annotated frames timelapse if overlay was created
+        annotated_dir = night / "annotated"
+        if overlay and annotated_dir.exists() and len(events) > 0:
+            annotated_mp4 = night / "timelapse_annotated.mp4"
+            if build_timelapse_video(annotated_dir, annotated_mp4, fps=fps, quality=quality):
+                print(f"  Annotated timelapse saved to: {annotated_mp4}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -658,7 +747,12 @@ Output files:
     parser.add_argument(
         "--all-tools",
         action="store_true",
-        help="Run all optional tools (validation, visualization, and overlay)"
+        help='Run all optional tools (validation, visualization, overlay, and timelapse)'
+    )
+    parser.add_argument(
+        '--timelapse',
+        action='store_true',
+        help='Generate MP4 timelapse videos from frames and annotated images'
     )
     
     args = parser.parse_args()
@@ -668,5 +762,6 @@ Output files:
         args.validate = True
         args.visualize = True
         args.overlay = True
+        args.timelapse = True
     
-    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay)
+    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay, args.timelapse)
