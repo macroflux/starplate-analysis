@@ -68,6 +68,41 @@ Analyze a night's worth of frames:
 python analysis_simple/analyze.py data/night_2025-12-24/
 ```
 
+#### Window Source Selection
+
+The analyzer supports three window sources for detecting activity periods:
+
+**Interest-based windows (default)** - Rule-based detection using frame metrics:
+```bash
+python analysis_simple/analyze.py data/night_2025-12-24/ --windows-source interest
+```
+
+**ML-based windows** - Uses classifier predictions (requires ML training first):
+```bash
+# First, train ML classifier and generate windows
+cd ../analysis_ml_activity_classifier
+python train.py ../data/night_2025-12-24/
+cd ../analysis_ml_windows
+python infer_windows.py ../data/night_2025-12-24/
+
+# Then run analysis with ML windows
+cd ../analysis_simple
+python analyze.py data/night_2025-12-24/ --windows-source ml
+```
+
+**Hybrid windows** - Combines ML and interest-based windows:
+```bash
+python analyze.py data/night_2025-12-24/ --windows-source hybrid
+```
+
+The hybrid strategy:
+1. Starts with ML windows (typically higher confidence)
+2. Adds interest windows that don't overlap ML windows (IoU < 0.3 threshold)
+3. Merges any overlapping windows
+4. Outputs result to `data/windows_hybrid.json`
+
+This gives you the best of both approaches: ML's learned patterns plus rule-based novelty detection.
+
 #### Run All Tools (Recommended)
 
 Run validation, analysis, visualization, and overlay generation in one command:
@@ -100,8 +135,8 @@ python analysis_simple/analyze.py data/night_2025-12-24/ --overlay
 # Generate timelapse videos
 python analysis_simple/analyze.py data/night_2025-12-24/ --timelapse
 
-# Combine multiple options
-python analysis_simple/analyze.py data/night_2025-12-24/ --validate --visualize --timelapse
+# Combine multiple options with ML windows
+python analysis_simple/analyze.py data/night_2025-12-24/ --windows-source ml --validate --visualize --timelapse
 ```
 
 #### With Custom Configuration

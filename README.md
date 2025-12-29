@@ -66,7 +66,7 @@ See [`tools/README.md`](tools/README.md) for information about all utility tools
    python fetch.py 20251224
    ```
 
-2. **Run Basic Analysis** (Interest-Based Windows):
+2. **Run Basic Analysis**:
    ```bash
    cd ../../analysis_simple
    pip install -r requirements.txt
@@ -81,22 +81,41 @@ See [`tools/README.md`](tools/README.md) for information about all utility tools
    - **Annotated Frames** (annotated/ - detected streaks overlaid)
    - **Timelapse Videos** (timelapse/ - full-night MP4 videos)
 
-3. **Optional: Run ML Activity Detection**:
+3. **Choose Your Window Source**:
+
+   The analyzer supports three window detection strategies via the `--windows-source` flag:
+
+   **Interest-based (default)** - Fast, rule-based detection:
    ```bash
-   # Train classifier and detect ML windows
+   python analyze.py ../data/night_2025-12-24/ --windows-source interest
+   ```
+
+   **ML-based** - Uses trained classifier (requires ML setup first):
+   ```bash
+   # First, train classifier and generate ML windows
    cd ../analysis_ml_activity_classifier
    pip install -r requirements-ml.txt
    python train.py ../data/night_2025-12-24/
-   
-   # Generate per-window artifacts for ML windows
    cd ../analysis_ml_windows
-   python infer_windows.py ../data/night_2025-12-24/ --artifacts
+   python infer_windows.py ../data/night_2025-12-24/
+   
+   # Then run analysis with ML windows
+   cd ../analysis_simple
+   python analyze.py ../data/night_2025-12-24/ --windows-source ml --all-tools
    ```
 
-   This adds:
-   - **ML Predictions** (ml/predictions.csv with raw and smoothed probabilities)
-   - **ML Windows** (data/ml_windows.json with peak-seeded detection)
-   - **ML Activity Artifacts** (activity_ml/ - per-window timelapses, keograms, startrails)
+   **Hybrid** - Best of both worlds (ML + non-overlapping interest windows):
+   ```bash
+   python analyze.py ../data/night_2025-12-24/ --windows-source hybrid --all-tools
+   ```
+
+   The hybrid mode:
+   - Starts with ML windows (higher confidence)
+   - Adds interest windows that don't significantly overlap (IoU < 0.3)
+   - Merges overlapping windows
+   - Captures both learned patterns and novel events
+
+   This unified interface means **all window sources produce artifacts in the same location** (`activity/`), making downstream processing consistent regardless of detection method.
 
 ### Individual Tool Usage
 
@@ -159,19 +178,19 @@ night_2025-12-24/
 
 ### Activity Detection System
 
-The pipeline offers **two complementary methods** for detecting high-interest periods:
+The pipeline offers **unified window-based activity detection** with three complementary strategies selectable via `--windows-source`:
 
-#### 1. Interest-Based Detection (analysis_simple)
+#### 1. Interest-Based Detection (default)
 
 Weighted **interest scoring algorithm** using per-frame metrics:
 
 - **Interest Score** = 0.60×(streak_count) + 0.15×(brightness_change) + 0.15×(contrast_change) + 0.10×(focus_change)
 - Robust z-scores (MAD-based) eliminate sensitivity to outliers
 - Configurable threshold, padding, and merging parameters
-- Generates focused artifacts (timelapses, keograms, startrails) for each activity window
+- Fast, rule-based, requires no training
 - **Output**: `data/activity_windows.json`, artifacts in `activity/`
 
-#### 2. ML-Based Detection (analysis_ml_activity_classifier + analysis_ml_windows)
+#### 2. ML-Based Detection
 
 **Peak-seeded windowing** on classifier probabilities:
 
@@ -179,14 +198,26 @@ Weighted **interest scoring algorithm** using per-frame metrics:
 - Uses 8 features: z-scored metrics + temporal deltas
 - **Peak-seeded algorithm**: EMA smoothing → peak detection → adaptive boundary expansion → merging
 - Handles short events (meteors) and intermittent activity (satellites through clouds)
-- **Output**: `data/ml_windows.json`, artifacts in `activity_ml/`
+- Data-driven, learns patterns, provides confidence scores
+- Requires ML training setup (see workflow above)
+- **Output**: `data/ml_windows.json`, artifacts in `activity/`
 
-**Why Both?**
-- Interest-based: Fast, rule-based, requires no training
-- ML-based: Data-driven, can learn patterns, provides confidence scores
-- Use together for validation or choose one based on your workflow
+#### 3. Hybrid Mode
 
-Both methods enable efficient review of long observation sessions by automatically highlighting frames with potential meteors, satellites, or other transient events.
+**Best of both worlds** - combines ML and interest-based detection:
+
+- Starts with ML windows (typically higher confidence)
+- Adds non-overlapping interest windows (IoU < 0.3 threshold)
+- Merges any overlapping windows using existing merge logic
+- Captures both learned patterns (ML) and novel events (interest)
+- Configurable IoU threshold via `hybrid_iou_threshold` in config
+- **Output**: `data/windows_hybrid.json`, artifacts in `activity/`
+
+#### Unified Interface
+
+All three strategies produce artifacts in the **same location** (`activity/`), making downstream processing consistent. The `--windows-source` flag provides a single, predictable interface that future dashboards can drive.
+
+**Recommendation**: Start with interest-based for quick results. Add ML detection after accumulating data. Use hybrid mode for maximum coverage.
 
 ### Configuration Guide
 
@@ -199,6 +230,7 @@ windows:
   pad: 10              # Padding frames around detected activity
   merge_gap: 8         # Merge windows closer than this
   max_windows: 10      # Maximum windows to report
+  hybrid_iou_threshold: 0.3  # IoU threshold for hybrid mode (lower = more interest windows added)
   w_streak: 0.60       # Weight for streak count
   w_mean: 0.15         # Weight for brightness change
   w_contrast: 0.15     # Weight for contrast change
