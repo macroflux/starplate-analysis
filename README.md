@@ -1,8 +1,10 @@
 # astroplate-analysis
 
-Automated post-processing pipeline for all-sky camera observations. Designed to analyze overnight image sequences from unattended all-sky systems (AllSky, auto-exposure rigs) to detect and catalog transient astronomical events including satellites, meteors, aircraft, and other moving objects.
+Automated post-processing and machine learning pipeline for all-sky camera observations. Analyzes overnight image sequences from unattended all-sky systems (AllSky, auto-exposure rigs) to detect, classify, and catalog transient astronomical events.
 
-**Workflow:** Capture images overnight → Batch analyze in the morning → Automatically identify and extract high-interest periods → Review concentrated activity windows instead of thousands of individual frames.
+**Purpose:** Beyond simple event detection, this pipeline builds structured datasets for feature engineering, trains classifiers to categorize transient types (satellites, meteors, aircraft), and performs in-depth analysis of detected events. Combines rule-based computer vision with machine learning to progressively improve detection accuracy and enable automated event classification.
+
+**Workflow:** Capture images overnight → Batch analyze with dual detection (interest-based + ML-based) → Extract features and build training data → Refine classifiers → Automatically categorize and analyze events → Review concentrated activity windows with confidence scores.
 
 ## Repository Structure
 
