@@ -1,6 +1,8 @@
 # astroplate-analysis
 
-A collection of experimental tools for astronomical plate/time-lapse analysis to detect satellites, meteors, and other transient events.
+Automated post-processing pipeline for all-sky camera observations. Designed to analyze overnight image sequences from unattended all-sky systems (AllSky, auto-exposure rigs) to detect and catalog transient astronomical events including satellites, meteors, aircraft, and other moving objects.
+
+**Workflow:** Capture images overnight → Batch analyze in the morning → Automatically identify and extract high-interest periods → Review concentrated activity windows instead of thousands of individual frames.
 
 ## Repository Structure
 
