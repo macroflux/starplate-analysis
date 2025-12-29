@@ -82,14 +82,13 @@ import cv2
 import json
 import csv
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 import numpy as np
 import argparse
 import yaml
 import sys
 import importlib.util
 from itertools import chain
-from typing import Dict, Tuple
 
 # Import timelapse module for video generation
 try:
@@ -557,9 +556,12 @@ def calculate_iou(window1: dict, window2: dict) -> float:
     """
     Calculate Intersection over Union (IoU) for two windows.
     
+    Windows use inclusive frame indices (both start and end are included).
+    For example, window {'start': 0, 'end': 10} contains frames [0, 1, 2, ..., 10].
+    
     Args:
-        window1: First window dict with 'start' and 'end' keys
-        window2: Second window dict with 'start' and 'end' keys
+        window1: First window dict with 'start' and 'end' keys (inclusive)
+        window2: Second window dict with 'start' and 'end' keys (inclusive)
     
     Returns:
         IoU value between 0.0 and 1.0
@@ -574,14 +576,14 @@ def calculate_iou(window1: dict, window2: dict) -> float:
     if intersection_start > intersection_end:
         return 0.0  # No overlap
     
-    intersection = intersection_end - intersection_start + 1
+    intersection = intersection_end - intersection_start + 1  # +1 because indices are inclusive
     
     # Calculate union
-    union = (e1 - s1 + 1) + (e2 - s2 + 1) - intersection
+    union = (e1 - s1 + 1) + (e2 - s2 + 1) - intersection  # +1 because indices are inclusive
     
     return float(intersection) / float(union)
 
-def merge_windows_simple(windows: List[Tuple[int, int]], merge_gap: int = 5) -> List[Tuple[int, int]]:
+def merge_windows_simple(windows: List[Tuple[int, int]], merge_gap: int = 8) -> List[Tuple[int, int]]:
     """
     Merge overlapping or nearby windows.
     
@@ -669,7 +671,7 @@ def select_windows(
                 best_match = None
                 best_overlap = 0
                 for w in result:
-                    overlap = min(w['end'], e) - max(w['start'], s) + 1
+                    overlap = max(0, min(w['end'], e) - max(w['start'], s) + 1)
                     if overlap > best_overlap:
                         best_overlap = overlap
                         best_match = w
