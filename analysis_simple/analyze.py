@@ -89,6 +89,7 @@ import yaml
 import sys
 import importlib.util
 from itertools import chain
+from typing import Dict, Tuple
 
 # Import timelapse module for video generation
 try:
@@ -504,6 +505,202 @@ def detect_activity_windows(
     windows.sort(key=lambda w: w["start"])
     return windows
 
+def load_interest_windows(windows_path: Path) -> List[dict]:
+    """
+    Load interest-based activity windows from activity_windows.json.
+    
+    Args:
+        windows_path: Path to activity_windows.json
+    
+    Returns:
+        List of window dictionaries
+    """
+    if not windows_path.exists():
+        return []
+    try:
+        with open(windows_path, 'r') as f:
+            windows = json.load(f)
+        # Ensure each window has a 'source' field
+        for w in windows:
+            if 'source' not in w:
+                w['source'] = 'interest'
+        return windows
+    except Exception as e:
+        print(f"Warning: Failed to load interest windows from {windows_path}: {e}", file=sys.stderr)
+        return []
+
+def load_ml_windows(windows_path: Path) -> List[dict]:
+    """
+    Load ML-based activity windows from ml_windows.json.
+    
+    Args:
+        windows_path: Path to ml_windows.json
+    
+    Returns:
+        List of window dictionaries
+    """
+    if not windows_path.exists():
+        return []
+    try:
+        with open(windows_path, 'r') as f:
+            windows = json.load(f)
+        # Ensure each window has a 'source' field
+        for w in windows:
+            if 'source' not in w:
+                w['source'] = 'ml'
+        return windows
+    except Exception as e:
+        print(f"Warning: Failed to load ML windows from {windows_path}: {e}", file=sys.stderr)
+        return []
+
+def calculate_iou(window1: dict, window2: dict) -> float:
+    """
+    Calculate Intersection over Union (IoU) for two windows.
+    
+    Args:
+        window1: First window dict with 'start' and 'end' keys
+        window2: Second window dict with 'start' and 'end' keys
+    
+    Returns:
+        IoU value between 0.0 and 1.0
+    """
+    s1, e1 = window1['start'], window1['end']
+    s2, e2 = window2['start'], window2['end']
+    
+    # Calculate intersection
+    intersection_start = max(s1, s2)
+    intersection_end = min(e1, e2)
+    
+    if intersection_start > intersection_end:
+        return 0.0  # No overlap
+    
+    intersection = intersection_end - intersection_start + 1
+    
+    # Calculate union
+    union = (e1 - s1 + 1) + (e2 - s2 + 1) - intersection
+    
+    return float(intersection) / float(union)
+
+def merge_windows_simple(windows: List[Tuple[int, int]], merge_gap: int = 5) -> List[Tuple[int, int]]:
+    """
+    Merge overlapping or nearby windows.
+    
+    Args:
+        windows: List of (start, end) tuples
+        merge_gap: Merge windows within this distance
+    
+    Returns:
+        List of merged (start, end) tuples
+    """
+    if not windows:
+        return []
+    
+    windows = sorted(windows, key=lambda t: t[0])
+    merged = [windows[0]]
+    
+    for s, e in windows[1:]:
+        ms, me = merged[-1]
+        if s <= me + merge_gap:
+            merged[-1] = (ms, max(me, e))
+        else:
+            merged.append((s, e))
+    
+    return merged
+
+def select_windows(
+    source: str,
+    interest_windows: List[dict],
+    ml_windows: List[dict],
+    iou_threshold: float = 0.3,
+    merge_gap: int = 8
+) -> Tuple[List[dict], Dict[str, int]]:
+    """
+    Select windows based on the specified source strategy.
+    
+    Args:
+        source: One of 'interest', 'ml', or 'hybrid'
+        interest_windows: Interest-based windows
+        ml_windows: ML-based windows
+        iou_threshold: IoU threshold for hybrid mode (default 0.3)
+        merge_gap: Gap for merging windows in hybrid mode
+    
+    Returns:
+        Tuple of (selected_windows, stats_dict)
+        where stats_dict contains counts of windows from each source
+    """
+    stats = {'interest': 0, 'ml': 0, 'hybrid_added': 0}
+    
+    if source == 'interest':
+        stats['interest'] = len(interest_windows)
+        return interest_windows, stats
+    
+    elif source == 'ml':
+        stats['ml'] = len(ml_windows)
+        return ml_windows, stats
+    
+    elif source == 'hybrid':
+        # Start with ML windows (higher confidence typically)
+        result = list(ml_windows)
+        stats['ml'] = len(ml_windows)
+        
+        # Add interest windows that don't significantly overlap with ML windows
+        for iw in interest_windows:
+            # Calculate IoU with all ML windows
+            max_iou = 0.0
+            for mw in ml_windows:
+                iou = calculate_iou(iw, mw)
+                max_iou = max(max_iou, iou)
+            
+            # If IoU is below threshold, this is a novel window
+            if max_iou < iou_threshold:
+                result.append(iw)
+                stats['hybrid_added'] += 1
+        
+        # Merge any overlapping windows
+        if result:
+            # Convert to (start, end) tuples for merging
+            tuples = [(w['start'], w['end']) for w in result]
+            merged_tuples = merge_windows_simple(tuples, merge_gap=merge_gap)
+            
+            # Convert back to window dicts, preserving source info where possible
+            final_windows = []
+            for s, e in merged_tuples:
+                # Find the best matching original window to preserve metadata
+                best_match = None
+                best_overlap = 0
+                for w in result:
+                    overlap = min(w['end'], e) - max(w['start'], s) + 1
+                    if overlap > best_overlap:
+                        best_overlap = overlap
+                        best_match = w
+                
+                if best_match:
+                    # Use the best match as template, update start/end
+                    merged_w = dict(best_match)
+                    merged_w['start'] = int(s)
+                    merged_w['end'] = int(e)
+                    merged_w['length'] = int(e - s + 1)
+                    merged_w['source'] = 'hybrid'
+                    final_windows.append(merged_w)
+                else:
+                    # Shouldn't happen, but create a minimal window
+                    final_windows.append({
+                        'start': int(s),
+                        'end': int(e),
+                        'length': int(e - s + 1),
+                        'source': 'hybrid'
+                    })
+            
+            # Sort chronologically
+            final_windows.sort(key=lambda w: w['start'])
+            stats['interest'] = len(interest_windows)
+            return final_windows, stats
+        
+        return result, stats
+    
+    else:
+        raise ValueError(f"Invalid windows source: {source}. Must be 'interest', 'ml', or 'hybrid'")
+
 def ensure_dir(p: Path) -> Path:
     """Create directory if it doesn't exist."""
     p.mkdir(parents=True, exist_ok=True)
@@ -674,7 +871,8 @@ def build_timelapse_video(
     )
 
 def main(night_dir: str, config_path: Optional[str] = None, 
-         validate: bool = False, visualize: bool = False, overlay: bool = False, timelapse: bool = False):
+         validate: bool = False, visualize: bool = False, overlay: bool = False, timelapse: bool = False,
+         windows_source: str = 'interest'):
     """
     Analyze astronomical time-lapse frames for transient events.
     
@@ -685,6 +883,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
         visualize: Generate plots after analysis
         overlay: Create annotated images with detected streaks after analysis
         timelapse: Generate MP4 timelapse video after analysis
+        windows_source: Window source ('interest', 'ml', or 'hybrid')
     """
     # Run validation if requested
     if validate:
@@ -951,7 +1150,7 @@ def main(night_dir: str, config_path: Optional[str] = None,
     merge_gap = int(wcfg.get("merge_gap", 8))
     max_windows = int(wcfg.get("max_windows", 10))
 
-    windows = detect_activity_windows(
+    interest_windows = detect_activity_windows(
         interest,
         threshold=threshold,
         min_len=min_len,
@@ -971,9 +1170,59 @@ def main(night_dir: str, config_path: Optional[str] = None,
     out_events = data_dir / "events.json"
     out_events.write_text(json.dumps(events, indent=2))
 
-    # Save activity windows
+    # Always save interest-based windows to activity_windows.json
     out_windows = data_dir / "activity_windows.json"
-    out_windows.write_text(json.dumps(windows, indent=2))
+    out_windows.write_text(json.dumps(interest_windows, indent=2))
+
+    # --- STEP 3b: Window Source Selection ---
+    # Load ML windows if needed
+    ml_windows = []
+    if windows_source in ('ml', 'hybrid'):
+        ml_windows_path = data_dir / "ml_windows.json"
+        if not ml_windows_path.exists():
+            if windows_source == 'ml':
+                print(f"\nError: ML windows file not found: {ml_windows_path}", file=sys.stderr)
+                print(f"Please run ML classifier first:", file=sys.stderr)
+                print(f"  cd analysis_ml_activity_classifier && python train.py {night_dir}", file=sys.stderr)
+                print(f"  cd ../analysis_ml_windows && python infer_windows.py {night_dir}", file=sys.stderr)
+                sys.exit(1)
+            else:
+                print(f"\nWarning: ML windows file not found: {ml_windows_path}", file=sys.stderr)
+                print(f"Falling back to interest-only windows for hybrid mode.", file=sys.stderr)
+                windows_source = 'interest'
+        else:
+            ml_windows = load_ml_windows(ml_windows_path)
+    
+    # Select windows based on source
+    iou_threshold = float(wcfg.get("hybrid_iou_threshold", 0.3))
+    windows, window_stats = select_windows(
+        windows_source,
+        interest_windows,
+        ml_windows,
+        iou_threshold=iou_threshold,
+        merge_gap=merge_gap
+    )
+    
+    # Save hybrid windows if applicable
+    if windows_source == 'hybrid' and windows:
+        hybrid_windows_path = data_dir / "windows_hybrid.json"
+        hybrid_windows_path.write_text(json.dumps(windows, indent=2))
+        print(f"\nHybrid windows saved to: {hybrid_windows_path}")
+    
+    # Display window source information
+    print(f"\n{'='*60}")
+    print(f"Window Source: {windows_source}")
+    print(f"{'='*60}")
+    
+    if windows_source == 'interest':
+        print(f"Loaded {window_stats['interest']} interest-based windows")
+    elif windows_source == 'ml':
+        print(f"Loaded {window_stats['ml']} ML-based windows")
+    elif windows_source == 'hybrid':
+        print(f"Loaded {window_stats['ml']} ML-based windows")
+        print(f"Loaded {window_stats['interest']} interest-based windows")
+        print(f"Added {window_stats['hybrid_added']} non-overlapping interest windows (IoU < {iou_threshold})")
+        print(f"Final merged count: {len(windows)} windows")
 
     print(f"\nAnalysis complete!")
     print(f"  Data directory: {data_dir}")
@@ -985,12 +1234,14 @@ def main(night_dir: str, config_path: Optional[str] = None,
     # Display detected windows
     if windows:
         print("\n" + "="*60)
-        print("Activity windows detected (interest_score):")
+        print(f"Activity windows detected ({windows_source}):")
         print("="*60)
         for w in windows:
+            source_label = f" [{w.get('source', 'unknown')}]" if 'source' in w else ""
+            peak_str = f"peak@{w['peak_index']}={w['peak_value']:.2f}" if 'peak_value' in w else ""
             print(
                 f"  frames {w['start']}–{w['end']} "
-                f"(len={w['length']}) peak@{w['peak_index']}={w['peak_value']:.2f}"
+                f"(len={w['length']}){source_label} {peak_str}"
             )
     else:
         print("\nNo activity windows detected above threshold.")
@@ -1158,14 +1409,22 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Basic analysis with interest-based windows (default)
   python analyze.py ./night_2025-12-24
-  python analyze.py ./night_2025-12-24 --config custom_config.yaml
+  
+  # Use ML-based windows
+  python analyze.py ./night_2025-12-24 --windows-source ml
+  
+  # Use hybrid windows (ML + non-overlapping interest)
+  python analyze.py ./night_2025-12-24 --windows-source hybrid
+  
+  # With custom config and all tools
+  python analyze.py ./night_2025-12-24 --config custom_config.yaml --all-tools
   python analyze.py ./night_2025-12-24 --validate --visualize --overlay
-  python analyze.py ./night_2025-12-24 --all-tools
   
 Output files:
   - masks/: sky_mask.png, persistent_edges.png, combined_mask.png
-  - data/: metrics.csv, events.json, activity_windows.json
+  - data/: metrics.csv, events.json, activity_windows.json, ml_windows.json (if ML mode)
   - activity/window_XX_YYYY_ZZZZ/: Per-window artifacts (timelapse, keogram, startrails)
   - plots/ (with --visualize): Time-series plots of metrics
   - annotated/ (with --overlay): Frames with detected streaks drawn
@@ -1206,6 +1465,14 @@ Output files:
         action='store_true',
         help='Generate MP4 timelapse videos from frames and annotated images'
     )
+    parser.add_argument(
+        '--windows-source',
+        choices=['interest', 'ml', 'hybrid'],
+        default='interest',
+        help='Window source: interest (default), ml, or hybrid. '
+             'ML mode requires ml_windows.json from ML classifier. '
+             'Hybrid merges both sources with IoU-based deduplication.'
+    )
     
     args = parser.parse_args()
     
@@ -1216,4 +1483,4 @@ Output files:
         args.overlay = True
         args.timelapse = True
     
-    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay, args.timelapse)
+    main(args.night_dir, args.config, args.validate, args.visualize, args.overlay, args.timelapse, args.windows_source)
