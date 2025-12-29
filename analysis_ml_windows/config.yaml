@@ -1,0 +1,21 @@
+ml_windows:
+  # threshold on smoothed probability
+  prob_threshold: 0.45 # was 0.65
+
+  # windowing
+  min_len: 2             # was 6
+  pad: 10
+  merge_gap: 8
+  max_windows: 10
+
+  # smoothing
+  smoothing: "ema"          # "ema" or "moving_average"
+  ema_alpha: 0.35           # 0..1 (higher = less smoothing) was 0.25
+  ma_window: 7              # odd number preferred was 9
+
+  # artifacts (only used when --artifacts)
+  fps: 30
+  keogram_column_width: 3
+  startrails_gamma: 1.2
+
+  
